@@ -1,0 +1,43 @@
+# Traz os backups diários do servidor para o GitHub (toda segunda-feira e quando você pedir).
+# Para baixar: aba Actions → "Backup do servidor" → abra a execução → Artifacts → consultoria-backups.
+name: Backup do servidor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10 * * 1'   # segunda-feira, 6h17 em Manaus
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      IP: ${{ vars.SERVIDOR_IP || '137.131.254.79' }}
+      USUARIO: ${{ vars.SERVIDOR_USUARIO || 'ubuntu' }}
+    steps:
+      - name: Preparar a chave de acesso
+        env:
+          CHAVE: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          [ -n "$IP" ] || { echo "::error::Falta a variável SERVIDOR_IP."; exit 1; }
+          [ -n "$CHAVE" ] || { echo "::error::Falta o secret ORACLE_SSH_KEY."; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$CHAVE" | tr -d '\r' > ~/.ssh/servidor && chmod 600 ~/.ssh/servidor
+          ssh-keyscan -T 15 "$IP" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copiar os backups
+        run: |
+          mkdir -p backups
+          rsync -az -e "ssh -i $HOME/.ssh/servidor" --rsync-path="sudo rsync" \
+            "$USUARIO@$IP:/opt/consultoria/servidor/dados/backups/" backups/
+          ls -la backups
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: consultoria-backups
+          path: backups/
+          retention-days: 90
+
+      - name: Apagar a chave
+        if: always()
+        run: rm -f ~/.ssh/servidor

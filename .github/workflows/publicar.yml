@@ -1,0 +1,68 @@
+# Publica (ou atualiza) o Consultoria de musculação no servidor da Oracle, direto pelo GitHub.
+# Para usar: aba Actions → "Publicar no servidor" → Run workflow.
+# Precisa do secret ORACLE_SSH_KEY (chave privada de acesso ao servidor). Veja Manuais/Publicar pelo GitHub.md
+name: Publicar no servidor
+
+on:
+  workflow_dispatch:
+    inputs:
+      dominio:
+        description: Domínio próprio (deixe vazio para usar o endereço grátis consultoria.IP.sslip.io)
+        default: ''
+        required: false
+
+concurrency: publicar-servidor
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      IP: ${{ vars.SERVIDOR_IP || '137.131.254.79' }}   # servidor da Oracle (o mesmo do lava jato)
+      USUARIO: ${{ vars.SERVIDOR_USUARIO || 'ubuntu' }}
+      DOMINIO: ${{ inputs.dominio }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar a chave de acesso
+        env:
+          CHAVE: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          if [ -z "$IP" ]; then
+            echo "::error::Falta cadastrar a variável SERVIDOR_IP com o IP do servidor (veja Manuais/Publicar pelo GitHub.md)."
+            exit 1
+          fi
+          [ -n "$DOMINIO" ] || DOMINIO="consultoria.$IP.sslip.io"
+          echo "DOMINIO=$DOMINIO" >> "$GITHUB_ENV"
+          if [ -z "$CHAVE" ]; then
+            echo "::error::Falta cadastrar a chave do servidor no secret ORACLE_SSH_KEY (veja Manuais/Publicar pelo GitHub.md)."
+            exit 1
+          fi
+          case "$DOMINIO" in *[!a-zA-Z0-9.-]*|"") echo "::error::Endereço inválido: $DOMINIO"; exit 1;; esac
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$CHAVE" | tr -d '\r' > ~/.ssh/servidor
+          chmod 600 ~/.ssh/servidor
+          ssh-keyscan -T 15 "$IP" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/servidor -o BatchMode=yes "$USUARIO@$IP" true \
+            || { echo "::error::Não consegui entrar no servidor com essa chave."; exit 1; }
+
+      - name: Enviar os arquivos
+        run: |
+          ssh -i ~/.ssh/servidor "$USUARIO@$IP" \
+            'sudo mkdir -p /opt/consultoria && (command -v rsync >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq rsync))'
+          rsync -az --delete -e "ssh -i $HOME/.ssh/servidor" --rsync-path="sudo rsync" \
+            --exclude 'servidor/dados' --exclude .git --exclude .github --exclude node_modules \
+            --exclude '*.command' --exclude Manuais --exclude README.md \
+            ./ "$USUARIO@$IP:/opt/consultoria/"
+
+      - name: Instalar no servidor
+        run: ssh -i ~/.ssh/servidor "$USUARIO@$IP" "sudo bash /opt/consultoria/servidor/deploy/instalar.sh '$DOMINIO'"
+
+      - name: Resumo
+        run: |
+          echo "### Publicado: https://$DOMINIO" >> "$GITHUB_STEP_SUMMARY"
+          echo "Na primeira publicação, o usuário \`professor\` e a senha inicial aparecem no passo **Instalar no servidor**. Troque a senha no primeiro acesso." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apagar a chave
+        if: always()
+        run: rm -f ~/.ssh/servidor
