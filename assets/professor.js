@@ -194,10 +194,11 @@ function editarAluno(id) {
 }
 function apagarAluno(id) {
   const a = alunoPor(id);
-  if (!confirm(`Apagar ${a.nome} e TODO o histórico (treinos, avaliações, fotos, mensagens e pagamentos)? Isso não tem volta.\n\nSe ele só parou, prefira mudar a situação para "Encerrado".`)) return;
-  for (const c of ['treinos', 'execucoes', 'avaliacoes', 'fotos', 'checkins', 'mensagens', 'pagamentos']) S[c] = S[c].filter((x) => x.alunoId !== id);
-  S.alunos = S.alunos.filter((x) => x.id !== id);
-  salvar(); fecharModal(); ir('alunos');
+  confirmar(`Apagar ${a.nome} e TODO o histórico (treinos, avaliações, fotos, mensagens e pagamentos)? Isso não tem volta.\n\nSe ele só parou, prefira mudar a situação para "Encerrado".`, () => {
+    for (const c of ['treinos', 'execucoes', 'avaliacoes', 'fotos', 'checkins', 'mensagens', 'pagamentos']) S[c] = S[c].filter((x) => x.alunoId !== id);
+    S.alunos = S.alunos.filter((x) => x.id !== id);
+    salvar(); fecharModal(); ir('alunos');
+  }, 'Apagar aluno');
 }
 
 // ---------- página do aluno ----------
@@ -301,8 +302,7 @@ function comoModelo(id) {
 }
 function apagarTreino(id) {
   const t = S.treinos.find((x) => x.id === id), n = S.execucoes.filter((e) => e.treinoId === id).length;
-  if (!confirm(`Apagar o treino "${t.nome}"?${n ? `\n\nOs ${n} treinos já registrados com ele continuam no histórico.` : ''}`)) return;
-  S.treinos = S.treinos.filter((x) => x.id !== id); salvar(); render();
+  confirmar(`Apagar o treino "${t.nome}"?${n ? `\n\nOs ${n} treinos já registrados com ele continuam no histórico.` : ''}`, () => { S.treinos = S.treinos.filter((x) => x.id !== id); salvar(); render(); }, 'Apagar');
 }
 
 // ---------- editor de treino (também usado pelos modelos) ----------
@@ -350,7 +350,7 @@ function edAlvo(path) { const ps = path.split('.'); let o = VIEW.rasc; for (let 
 function edSet(path, v) { const [o, k] = edAlvo(path); o[k] = v; }
 function edLista(path) { return path.split('.').reduce((o, k) => o[k], VIEW.rasc); }
 function edMover(path, i, d) { const l = edLista(path); const [x] = l.splice(i, 1); l.splice(i + d, 0, x); render(); }
-function edRemover(path, i) { const l = edLista(path); if (path === 'dias' && l[i].itens.length && !confirm(`Remover "${l[i].nome}" e seus ${l[i].itens.length} exercícios?`)) return; l.splice(i, 1); render(); }
+function edRemover(path, i) { const l = edLista(path), tira = () => { l.splice(i, 1); render(); }; if (path === 'dias' && l[i].itens.length) return confirmar(`Remover "${l[i].nome}" e seus ${l[i].itens.length} exercícios?`, tira, 'Remover'); tira(); }
 function edAddEx(di) {
   const d = VIEW.rasc.dias[di], ult = d.itens[d.itens.length - 1];
   d.itens.push({ id: uid('i'), exId: ult ? ult.exId : S.exercicios[0]?.id, series: ult ? ult.series : '3', reps: ult ? ult.reps : '10-12', carga: '', descanso: ult ? ult.descanso : '60s', metodo: 'Normal', obs: '' });
@@ -358,7 +358,7 @@ function edAddEx(di) {
 }
 function edAddDia() { const t = VIEW.rasc; t.dias.push({ id: uid('d'), nome: 'Treino ' + String.fromCharCode(65 + t.dias.length), itens: [] }); render(); }
 function edDupDia(di) { const t = VIEW.rasc, c = JSON.parse(JSON.stringify(t.dias[di])); c.id = uid('d'); c.nome += ' (cópia)'; c.itens.forEach((it) => (it.id = uid('i'))); t.dias.splice(di + 1, 0, c); render(); }
-function sairEditor() { if (!confirm('Sair sem salvar as alterações deste treino?')) return; const v = VIEW.volta || { v: 'inicio' }; VIEW = v; render(); scrollTo(0, 0); }
+function sairEditor() { confirmar('Sair sem salvar as alterações deste treino?', () => { VIEW = VIEW.volta || { v: 'inicio' }; render(); scrollTo(0, 0); }, 'Sair sem salvar'); }
 function salvarEditor() {
   const t = VIEW.rasc;
   t.nome = String(t.nome || '').trim() || 'Treino';
@@ -424,7 +424,7 @@ function editarAvaliacao(alunoId, id) {
     const medidas = {}; for (const k in d) if (k.startsWith('m_') && lerNum(d[k]) != null) medidas[k.slice(2)] = lerNum(d[k]);
     Object.assign(x, { data: d.data, peso: lerNum(d.peso), gordura: lerNum(d.gordura), magra: lerNum(d.magra), medidas, obs: d.obs });
     if (!id) S.avaliacoes.push(x); salvar(); toast('Avaliação salva');
-  }, 'Salvar', { lg: true, extra: id ? `<button type="button" class="btn danger" style="margin-right:auto" onclick="if(confirm('Apagar esta avaliação?')){S.avaliacoes=S.avaliacoes.filter(x=>x.id!=='${id}');salvar();fecharModal();render()}">Apagar</button>` : '' });
+  }, 'Salvar', { lg: true, extra: id ? `<button type="button" class="btn danger" style="margin-right:auto" onclick="confirmar('Apagar esta avaliação?',()=>{S.avaliacoes=S.avaliacoes.filter(x=>x.id!=='${id}');salvar();fecharModal();render()},'Apagar')">Apagar</button>` : '' });
 }
 async function enviarFotos(input, alunoId) {
   const arqs = [...input.files]; if (!arqs.length) return;
@@ -476,12 +476,12 @@ function receber(id) {
   abrirModal('Registrar pagamento', `<p style="margin-top:0">${esc(alunoPor(p.alunoId).nome)} · ${esc(mesNome(p.comp))} · <b>${brl(p.valor)}</b></p><div class="fgrid">${campo('Data do pagamento', 'dataPag', hoje(), 'date', 'required')}${selCampo('Forma', 'forma', FORMAS, 'Pix')}</div>`,
     (d) => { Object.assign(p, { pago: true, dataPag: d.dataPag, forma: d.forma }); salvar(); toast('Pagamento registrado'); }, 'Confirmar');
 }
-function desfazerPag(id) { const p = S.pagamentos.find((x) => x.id === id); if (!confirm('Marcar esta mensalidade como não paga?')) return; Object.assign(p, { pago: false, dataPag: null, forma: '' }); salvar(); render(); }
+function desfazerPag(id) { const p = S.pagamentos.find((x) => x.id === id); confirmar('Marcar esta mensalidade como não paga?', () => { Object.assign(p, { pago: false, dataPag: null, forma: '' }); salvar(); render(); }, 'Desfazer pagamento'); }
 function editarPag(id, alunoId) {
   const p = id ? S.pagamentos.find((x) => x.id === id) : { alunoId, comp: hoje().slice(0, 7), venc: hoje(), valor: alunoPor(alunoId)?.valor || 0 };
   abrirModal(id ? 'Editar cobrança' : 'Nova cobrança', `<div class="fgrid">${campo('Referente ao mês', 'comp', p.comp, 'month', 'required')}${campo('Vencimento', 'venc', p.venc, 'date', 'required')}${campo('Valor (R$)', 'valor', p.valor, 'number', 'step="0.01" min="0" required')}</div>`,
     (d) => { const x = id ? p : { id: uid('pg'), alunoId, pago: false, dataPag: null, forma: '' }; Object.assign(x, { comp: d.comp, venc: d.venc, valor: lerNum(d.valor) || 0 }); if (!id) S.pagamentos.push(x); salvar(); },
-    'Salvar', { extra: id ? `<button type="button" class="btn danger" style="margin-right:auto" onclick="if(confirm('Apagar esta cobrança?')){S.pagamentos=S.pagamentos.filter(x=>x.id!=='${id}');salvar();fecharModal();render()}">Apagar</button>` : '' });
+    'Salvar', { extra: id ? `<button type="button" class="btn danger" style="margin-right:auto" onclick="confirmar('Apagar esta cobrança?',()=>{S.pagamentos=S.pagamentos.filter(x=>x.id!=='${id}');salvar();fecharModal();render()},'Apagar')">Apagar</button>` : '' });
 }
 
 // ---------- acesso do aluno ao app ----------
@@ -513,8 +513,9 @@ function criarAcesso(alunoId) {
   }, ac ? 'Gerar' : 'Criar acesso');
 }
 async function bloquearAcesso(id, ativo) {
-  if (!ativo && !confirm('Bloquear o acesso? O aluno sai do app na hora e não consegue entrar até você liberar.')) return;
-  try { await api('PUT', '/api/acessos/' + id, { ativo: !!ativo }); ACESSOS = await api('GET', '/api/acessos'); render(); } catch (e) { toast(e.message); }
+  const faz = async () => { try { await api('PUT', '/api/acessos/' + id, { ativo: !!ativo }); ACESSOS = await api('GET', '/api/acessos'); render(); } catch (e) { toast(e.message); } };
+  if (!ativo) return confirmar('Bloquear o acesso? O aluno sai do app na hora e não consegue entrar até você liberar.', faz, 'Bloquear');
+  faz();
 }
 
 // ---------- modelos de treino ----------
@@ -525,7 +526,7 @@ function vModelos() {
     ${ms.length ? `<div class="grid g2">${ms.map((t) => `<div class="card"><div class="card-head"><h2>${esc(t.nome)}</h2><span class="pill">${t.dias.length} divisões</span></div>
       <div class="small muted">${t.dias.map((d) => esc(d.nome)).join(' · ')}</div>
       <div class="row" style="margin-top:12px"><button class="btn sm pri" onclick="aplicarModelo('${t.id}')">Aplicar a um aluno</button><button class="btn sm" onclick="abrirEditor('${t.id}')">Editar</button>
-      <button class="btn sm ghost danger" onclick="if(confirm('Apagar o modelo?')){S.treinos=S.treinos.filter(x=>x.id!=='${t.id}');salvar();render()}">Apagar</button></div></div>`).join('')}</div>`
+      <button class="btn sm ghost danger" onclick="confirmar('Apagar este modelo de treino?',()=>{S.treinos=S.treinos.filter(x=>x.id!=='${t.id}');salvar();render()},'Apagar')">Apagar</button></div></div>`).join('')}</div>`
       : '<div class="card"><p class="vazio">Nenhum modelo ainda. Crie um aqui ou use "Salvar como modelo" no treino de um aluno.</p></div>'}`;
 }
 function novoModelo() { VIEW = { v: 'editor', rasc: { id: uid('t'), alunoId: null, nome: 'Novo modelo', ativo: false, dias: [{ id: uid('d'), nome: 'Treino A', itens: [] }] }, volta: { v: 'modelos' } }; render(); }
@@ -562,7 +563,7 @@ function novoExercicio(doEditor, id) {
     <div class="full">${areaCampo('Dica de execução (aparece para o aluno)', 'dica', e.dica, 'rows="2"')}</div></div>
     ${usos ? `<p class="small muted">Usado em ${usos} treino(s).</p>` : ''}`,
   (d) => { const x = id ? e : { id: uid('ex') }; Object.assign(x, d); if (!id) S.exercicios.push(x); salvar(); toast(id ? 'Exercício salvo' : 'Exercício cadastrado' + (doEditor ? ': já aparece na lista' : '')); if (doEditor) { fecharModal(); render(); return false; } },
-  'Salvar', { extra: id && !usos ? `<button type="button" class="btn danger" style="margin-right:auto" onclick="if(confirm('Apagar este exercício?')){S.exercicios=S.exercicios.filter(x=>x.id!=='${id}');salvar();fecharModal();render()}">Apagar</button>` : '' });
+  'Salvar', { extra: id && !usos ? `<button type="button" class="btn danger" style="margin-right:auto" onclick="confirmar('Apagar este exercício?',()=>{S.exercicios=S.exercicios.filter(x=>x.id!=='${id}');salvar();fecharModal();render()},'Apagar')">Apagar</button>` : '' });
 }
 
 // ---------- mensagens ----------
@@ -610,7 +611,7 @@ function vConfig() {
       <button class="btn pri">Salvar</button></div></form>
     <div class="card"><h2>Conta e dados</h2><div class="stack">
       ${ONLINE ? '<button class="btn block" onclick="trocarSenha()">Trocar minha senha</button>' : ''}
-      <button class="btn block" onclick="exportar()">Baixar uma cópia de todos os dados</button>
+      ${ONLINE ? '<button class="btn block" onclick="exportar()">Baixar uma cópia de todos os dados</button>' : ''}
       ${ONLINE ? '<p class="small muted">O servidor também faz um backup automático por dia.</p><button class="btn block" onclick="sair()">Sair</button>' : '<button class="btn block danger" onclick="reiniciarDemo()">Recomeçar a demonstração do zero</button>'}</div></div></div>`;
 }
 function salvarConfig(e) {

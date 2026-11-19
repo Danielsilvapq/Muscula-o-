@@ -136,7 +136,7 @@ function finalizarTreino() {
     RUN = false; gravarRun(); pararTimer(); salvar(); VIEW = { v: 'inicio' }; toast('Treino registrado! O professor já pode ver. 💪');
   }, 'Salvar treino');
 }
-function descartarTreino() { if (!confirm('Descartar este treino? Nada do que você marcou será salvo.')) return; RUN = false; gravarRun(); pararTimer(); ir('inicio'); }
+function descartarTreino() { confirmar('Descartar este treino? Nada do que você marcou será salvo.', () => { RUN = false; gravarRun(); pararTimer(); ir('inicio'); }, 'Descartar'); }
 
 // ---------- cronômetro de descanso ----------
 let timerInt = null;

@@ -241,7 +241,7 @@ function entrarDemo(perfil, alunoId) {
   try { sessionStorage.setItem(KEY + '-u', JSON.stringify(U)); } catch (e) {}
   render(); scrollTo(0, 0);
 }
-function reiniciarDemo() { if (!confirm('Apagar tudo o que foi feito na demonstração e começar de novo?')) return; try { localStorage.removeItem(KEY); } catch (e) {} S = seedDemo(); salvar(); render(); }
+function reiniciarDemo() { confirmar('Apagar tudo o que foi feito na demonstração e começar de novo com os dados de exemplo?', () => { try { localStorage.removeItem(KEY); } catch (e) {} S = seedDemo(); salvar(); render(); }, 'Recomeçar'); }
 async function sair() {
   if (ONLINE) { try { await api('POST', '/api/logout'); } catch (e) {} S = vazio(); BASE = {}; carregado = false; }
   try { sessionStorage.removeItem(KEY + '-u'); } catch (e) {}
@@ -276,6 +276,17 @@ function abrirModal(titulo, corpo, onOk, botao = 'Salvar', { lg = false, extra =
   const pri = f.querySelector('input:not([type=hidden]),select,textarea');
   if (pri && matchMedia('(pointer:fine)').matches) pri.focus();
 }
+// confirmação dentro da própria página (o confirm() do navegador nem sempre aparece, ex.: dentro de apps)
+function confirmar(msg, fazer, botao = 'Confirmar') {
+  let c = $('#confirma'); if (c) c.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div id="confirma" class="modal-bg" style="z-index:70" role="dialog" aria-modal="true"><div class="modal" style="max-width:420px">
+    <p style="margin:0;white-space:pre-line;font-size:15.5px">${esc(msg)}</p><div class="modal-f"><button type="button" class="btn" id="cf_nao">Cancelar</button><button type="button" class="btn pri" id="cf_sim">${esc(botao)}</button></div></div></div>`);
+  c = $('#confirma');
+  const fechar = () => c.remove();
+  $('#cf_nao').onclick = fechar; c.onclick = (e) => { if (e.target === c) fechar(); };
+  $('#cf_sim').onclick = () => { fechar(); fazer(); };
+  $('#cf_sim').focus();
+}
 function fecharModal() { const m = $('#modal'); if (!m) return; m.hidden = true; m.innerHTML = ''; MODAL_OK = null; document.body.style.overflow = ''; if (atrasoRender && podeRender()) { atrasoRender = false; render(); } }
 function erroModal(msg) { const e = $('#merr'); if (e) { e.textContent = msg; e.hidden = false; } }
 function dadosForm(f) {
@@ -290,7 +301,7 @@ function dadosForm(f) {
 }
 let toastT;
 function toast(msg) { let t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); } t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3000); }
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#modal').hidden) fecharModal(); });
+document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if ($('#confirma')) $('#confirma').remove(); else if (!$('#modal').hidden) fecharModal(); });
 const campo = (rot, nome, val = '', tipo = 'text', extra = '') => `<label class="f"><span>${rot}</span><input class="i" name="${nome}" type="${tipo}" value="${esc(val)}" ${extra}></label>`;
 const selCampo = (rot, nome, opcoes, val, extra = '') => `<label class="f"><span>${rot}</span><select class="i" name="${nome}" ${extra}>${opcoes.map((o) => { const [v, t] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}"${String(v) === String(val ?? '') ? ' selected' : ''}>${esc(t)}</option>`; }).join('')}</select></label>`;
 const areaCampo = (rot, nome, val = '', extra = '') => `<label class="f"><span>${rot}</span><textarea class="i" name="${nome}" ${extra}>${esc(val)}</textarea></label>`;
